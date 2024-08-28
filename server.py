@@ -1,3 +1,4 @@
+import json
 import base64
 import requests
 from flask import Flask, request, jsonify
@@ -5,10 +6,10 @@ import os
 
 app = Flask(__name__)
 
-# Ruta al archivo de seguimiento de números (en la misma carpeta)
+# Ruta al archivo de seguimiento de números
 sent_numbers_file = 'sent_numbers.txt'
 
-# Nombres de los archivos PDF (en la misma carpeta que el script)
+# Nombres de los archivos PDF
 pdf_files = [
     "CARTERAS_Dama.pdf",
     "RELOJES_CABALLERO.pdf",
@@ -19,7 +20,7 @@ pdf_files = [
 
 # Wuzapi API endpoint y token
 wuzapi_url = "http://localhost:8080/chat/send/document"
-wuzapi_token = "jhon"  # Reemplaza con tu token real
+wuzapi_token = "jhon"
 
 def encode_file_to_base64(file_path):
     with open(file_path, "rb") as file:
