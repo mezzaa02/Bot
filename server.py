@@ -49,7 +49,7 @@ def webhook():
     print(f"Parsed data: {data}")
 
     # Verifica si jsonData es una cadena y conviértela en diccionario
-    if isinstance(data.get('jsonData'), str):
+    if 'jsonData' in data and isinstance(data['jsonData'], str):
         json_data = json.loads(data['jsonData'])
     else:
         json_data = data.get('jsonData', {})
