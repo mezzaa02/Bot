@@ -36,14 +36,17 @@ def webhook():
     print(f"Headers: {request.headers}")
     print(f"Request data: {request.data}")
 
-    # Asegurarse de que la solicitud sea JSON
-    if not request.is_json:
-        print("Unsupported Media Type: Expected application/json")
+    # Procesar datos dependiendo del tipo de contenido
+    if request.content_type == 'application/json':
+        data = request.get_json()
+    elif request.content_type == 'application/x-www-form-urlencoded':
+        data = request.form.to_dict()
+    else:
+        print("Unsupported Media Type")
         return jsonify({"error": "Unsupported Media Type"}), 415
 
-    data = request.get_json()  # Se usa get_json() para parsear la solicitud JSON
-    print(f"Parsed JSON data: {data}")
-    
+    print(f"Parsed data: {data}")
+
     sender = data.get('sender')
     print(f"Sender: {sender}")
 
