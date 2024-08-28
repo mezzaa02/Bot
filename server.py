@@ -54,7 +54,7 @@ def webhook():
     else:
         json_data = data.get('jsonData', {})
 
-    # Extraer el sender del JSON anidado
+    # Extraer el sender del JSON anidado en la estructura correcta
     try:
         sender = json_data['Info']['Sender']
         print(f"Sender: {sender}")
