@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import os
-import json  # Importa el módulo json para cargar la cadena como un diccionario
+import json  # Para manejar la carga de cadenas JSON
 
 app = Flask(__name__)
 
@@ -40,23 +40,16 @@ def webhook():
     # Procesar datos dependiendo del tipo de contenido
     if request.content_type == 'application/json':
         data = request.get_json()
-    elif request.content_type == 'application/x-www-form-urlencoded':
-        data = request.form.to_dict()
     else:
         print("Unsupported Media Type")
         return jsonify({"error": "Unsupported Media Type"}), 415
 
     print(f"Parsed data: {data}")
 
-    # Verifica si jsonData es una cadena y conviértela en diccionario
-    if 'jsonData' in data and isinstance(data['jsonData'], str):
-        json_data = json.loads(data['jsonData'])
-    else:
-        json_data = data.get('jsonData', {})
-
-    # Extraer el sender del JSON anidado en la estructura correcta
+    # Extraer el campo necesario desde la estructura JSON
     try:
-        sender = json_data['Info']['Sender']
+        # La estructura JSON esperada según el comando curl
+        sender = data['jsonData']['event']['Info']['Sender']
         print(f"Sender: {sender}")
     except KeyError:
         print("No sender found in request data")
