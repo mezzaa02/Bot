@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import os
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # Ruta al archivo de seguimiento de números (en la misma carpeta)
 sent_numbers_file = 'sent_numbers.txt'
