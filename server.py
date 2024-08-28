@@ -1,7 +1,7 @@
-from flask import Flask, request, jsonify
+import base64
 import requests
+from flask import Flask, request, jsonify
 import os
-import json
 
 app = Flask(__name__)
 
@@ -21,6 +21,10 @@ pdf_files = [
 wuzapi_url = "http://localhost:8080/chat/send/document"
 wuzapi_token = "jhon"  # Reemplaza con tu token real
 
+def encode_file_to_base64(file_path):
+    with open(file_path, "rb") as file:
+        return base64.b64encode(file.read()).decode('utf-8')
+
 def has_received_catalog(phone_number):
     if not os.path.exists(sent_numbers_file):
         return False
@@ -33,11 +37,6 @@ def mark_as_sent(phone_number):
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    # Mostrar los headers y el contenido de la solicitud para depuración
-    print(f"Headers: {request.headers}")
-    print(f"Request data: {request.data}")
-
-    # Procesar datos dependiendo del tipo de contenido
     if request.content_type == 'application/json':
         data = request.get_json()
     elif request.content_type == 'application/x-www-form-urlencoded':
@@ -45,17 +44,11 @@ def webhook():
         if 'jsonData' in data:
             data['jsonData'] = json.loads(data['jsonData'])
     else:
-        print("Unsupported Media Type")
         return jsonify({"error": "Unsupported Media Type"}), 415
 
-    print(f"Parsed data: {data}")
-
-    # Extraer el campo necesario desde la estructura JSON
     try:
         sender = data['jsonData']['event']['Info']['Sender']
-        print(f"Sender: {sender}")
     except KeyError:
-        print("No sender found in request data")
         return jsonify({"error": "Bad Request: No sender found"}), 400
 
     if not has_received_catalog(sender):
@@ -67,12 +60,17 @@ def webhook():
 
 def send_pdf(phone_number, pdf_filename):
     print(f"Sending PDF {pdf_filename} to {phone_number}")
-    with open(pdf_filename, 'rb') as pdf_file:
-        files = {'document': pdf_file}
-        payload = {'token': wuzapi_token, 'to': phone_number}
-        response = requests.post(wuzapi_url, files=files, data=payload)
-        print(f"Response from Wuzapi: {response.json()}")
+    
+    encoded_pdf = encode_file_to_base64(pdf_filename)
+    
+    payload = {
+        "Phone": phone_number,
+        "Document": f"data:application/octet-stream;base64,{encoded_pdf}",
+        "FileName": pdf_filename
+    }
+
+    response = requests.post(wuzapi_url, json=payload, headers={"token": wuzapi_token})
+    print(f"Response from Wuzapi: {response.json()}")
 
 if __name__ == '__main__':
-    # Habilitar el modo de depuración
     app.run(host='0.0.0.0', port=8765, debug=True)
