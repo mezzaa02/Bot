@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import os
+import json  # Importa el módulo json para cargar la cadena como un diccionario
 
 app = Flask(__name__)
 
@@ -47,9 +48,15 @@ def webhook():
 
     print(f"Parsed data: {data}")
 
+    # Verifica si jsonData es una cadena y conviértela en diccionario
+    if isinstance(data.get('jsonData'), str):
+        json_data = json.loads(data['jsonData'])
+    else:
+        json_data = data.get('jsonData', {})
+
     # Extraer el sender del JSON anidado
     try:
-        sender = data['jsonData']['Info']['Sender']
+        sender = json_data['Info']['Sender']
         print(f"Sender: {sender}")
     except KeyError:
         print("No sender found in request data")
