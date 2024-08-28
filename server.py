@@ -47,5 +47,5 @@ def send_pdf(phone_number, pdf_filename):
         response = requests.post(wuzapi_url, files=files, data=payload)
         print(response.json())
 
-if _name_ == '_main_':
+if __name__ == '_main_':
     app.run(host='0.0.0.0', port=8765)
