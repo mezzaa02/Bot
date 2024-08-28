@@ -21,6 +21,8 @@ wuzapi_url = "http://localhost:8080/chat/send/document"
 wuzapi_token = "jhon"  # Reemplaza con tu token real
 
 def has_received_catalog(phone_number):
+    if not os.path.exists(sent_numbers_file):
+        return False
     with open(sent_numbers_file, 'r') as file:
         return phone_number in file.read()
 
@@ -47,5 +49,5 @@ def send_pdf(phone_number, pdf_filename):
         response = requests.post(wuzapi_url, files=files, data=payload)
         print(response.json())
 
-if __name__ == '_main_':
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8765)
