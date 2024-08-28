@@ -47,10 +47,11 @@ def webhook():
 
     print(f"Parsed data: {data}")
 
-    sender = data.get('sender')
-    print(f"Sender: {sender}")
-
-    if not sender:
+    # Extraer el sender del JSON anidado
+    try:
+        sender = data['jsonData']['Info']['Sender']
+        print(f"Sender: {sender}")
+    except KeyError:
         print("No sender found in request data")
         return jsonify({"error": "Bad Request: No sender found"}), 400
 
