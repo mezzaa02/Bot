@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import os
-import json  # Para manejar la carga de cadenas JSON
+import json
 
 app = Flask(__name__)
 
@@ -40,6 +40,10 @@ def webhook():
     # Procesar datos dependiendo del tipo de contenido
     if request.content_type == 'application/json':
         data = request.get_json()
+    elif request.content_type == 'application/x-www-form-urlencoded':
+        data = request.form.to_dict()
+        if 'jsonData' in data:
+            data['jsonData'] = json.loads(data['jsonData'])
     else:
         print("Unsupported Media Type")
         return jsonify({"error": "Unsupported Media Type"}), 415
@@ -48,7 +52,6 @@ def webhook():
 
     # Extraer el campo necesario desde la estructura JSON
     try:
-        # La estructura JSON esperada según el comando curl
         sender = data['jsonData']['event']['Info']['Sender']
         print(f"Sender: {sender}")
     except KeyError:
