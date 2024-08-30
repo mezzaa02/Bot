@@ -13,11 +13,15 @@ sent_numbers_file = 'sent_numbers.txt'
 
 # Nombres de los archivos PDF
 pdf_files = [
-    "CARTERAS_Dama.pdf",
     "RELOJES_CABALLERO.pdf",
+    "RELOJES_Dama.pdf",
+    "CARTERAS_Dama.pdf",
+    "CORREAS_Caballero.pdf",
+    "CORREAS_Dama.pdf",
     "MORRALES_Caballero.pdf",
     "MORRALES_Dama.pdf",
-    "RELOJES_Dama.pdf"
+    "BILLETERAS_Dama.pdf",
+    "BILLETERAS_Caballero.pdf"
 ]
 
 # Wuzapi API endpoint y token
