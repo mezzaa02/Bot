@@ -16,12 +16,8 @@ pdf_files = [
     "RELOJES_CABALLERO.pdf",
     "RELOJES_Dama.pdf",
     "CARTERAS_Dama.pdf",
-    "CORREAS_Caballero.pdf",
-    "CORREAS_Dama.pdf",
     "MORRALES_Caballero.pdf",
-    "MORRALES_Dama.pdf",
-    "BILLETERAS_Dama.pdf",
-    "BILLETERAS_Caballero.pdf"
+    "MORRALES_Dama.pdf"
 ]
 
 # Wuzapi API endpoint y token
@@ -97,4 +93,4 @@ def send_pdfs_to_client(sender):
     session_locks.pop(sender, None)  # Eliminar el bloqueo de sesión después de completar el envío
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8765, debug=True)
+    app.run(host='0.0.0.0', port=7774, debug=True)
