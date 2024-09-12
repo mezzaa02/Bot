@@ -8,28 +8,44 @@ from threading import Lock
 
 app = Flask(__name__)
 
-# Ruta al archivo de seguimiento de números
-sent_numbers_file = 'sent_numbers.txt'
+# Ruta base para los archivos (ajusta esta ruta si los archivos están en otra carpeta)
+BASE_PATH = "./"  # Si los archivos están en la misma carpeta que el script
+# Si los videos están en una subcarpeta llamada 'videos', usa esta ruta:
+# BASE_PATH = "./videos/"
+
+# Archivo que contiene los números que ya han recibido los PDFs y videos
+sent_numbers_file = os.path.join(BASE_PATH, "sent_numbers.txt")
 
 # Nombres de los archivos PDF
-pdf_files = [
-    "CARTERAS_Dama.pdf",
-    "RELOJES_CABALLERO.pdf",
-    "MORRALES_Caballero.pdf",
-    "MORRALES_Dama.pdf",
-    "RELOJES_Dama.pdf"
-]
+pdf_names = ["RELOJES de Caballero.pdf", "CARTERAS de Dama.pdf", "RELOJES de Dama.pdf", "MORRALES de Dama.pdf", "MORRALES de Caballero.pdf"]
+pdf_files = [os.path.join(BASE_PATH, pdf) for pdf in pdf_names]
 
 # Mensajes de bienvenida
 welcome_messages = [
     "👋💚 *Buenas* 🤗",
-    "Somos empresa 💼 RUC: *20610868577* Registrada desde *1993* 🥳⭐⭐⭐⭐⭐",
+    "Somos empresa 💼 *RUC: 20610868577* Registrada desde *1993* 🥳⭐⭐⭐⭐⭐",
     "✅🩷🩵 Precios *POR DOCENA*\n(si lleva 12 productos *en TOTAL* ) 🛒✨\n▫️⌚Relojes: *50 soles*\n▫️👜Carteras: *50 soles*\n▫️💼Morrales: *50 soles*\n▫️ Billeteras: *20 soles*\n▫️👛Monederos: *15 soles*\n▫️👝Chequeras: *30 soles*\n▫️Correas: *30 soles*"
 ]
+
+# Nombres de los archivos de video
+video_files = [
+    #os.path.join(BASE_PATH, "video1.mp4"),  # Este video lleva un mensaje (separado)
+    os.path.join(BASE_PATH, "video2.mp4"),
+    os.path.join(BASE_PATH, "video3.mp4"),
+    os.path.join(BASE_PATH, "video4.mp4"),
+    os.path.join(BASE_PATH, "video5.mp4"),
+    os.path.join(BASE_PATH, "video6.mp4")
+]
+
+# Texto para el primer video
+first_video_message = """🥳Replica *A1 Rolex* ✨😍
+⌚Por *DOCENA* relojes *50 soles*
+💚 *CUALQUIER MODELO mismos precios* 🛍️"""
 
 # Wuzapi API endpoint y token
 wuzapi_url_text = "http://localhost:8080/chat/send/text"
 wuzapi_url_document = "http://localhost:8080/chat/send/document"
+wuzapi_url_video = "http://localhost:8080/chat/send/video"
 wuzapi_token = "jhon"
 
 # Diccionario para manejar las sesiones y su respectivo bloqueo
@@ -62,19 +78,39 @@ def send_message(phone_number, message_text):
     response = requests.post(wuzapi_url_text, json=payload, headers={"token": wuzapi_token})
     print(f"Response from Wuzapi: {response.json()}")
 
-def send_pdf(phone_number, pdf_filename):
+def send_pdf(phone_number, pdf_filename, pdf_name):
     """Función para enviar un PDF."""
-    print(f"Sending PDF {pdf_filename} to {phone_number}")
+    print(f"Sending PDF {pdf_name} to {phone_number}")
     
     encoded_pdf = encode_file_to_base64(pdf_filename)
     
     payload = {
         "Phone": phone_number,
         "Document": f"data:application/octet-stream;base64,{encoded_pdf}",
-        "FileName": pdf_filename
+        "FileName": pdf_name  # Aquí enviamos solo el nombre del archivo
     }
 
     response = requests.post(wuzapi_url_document, json=payload, headers={"token": wuzapi_token})
+    print(f"Response from Wuzapi: {response.json()}")
+
+def send_video(phone_number, video_filename):
+    """Función para enviar un video sin texto."""
+    # Verificar si el archivo de video existe
+    if not os.path.exists(video_filename):
+        print(f"Error: {video_filename} no existe.")
+        return
+    
+    print(f"Sending video {video_filename} to {phone_number}")
+    
+    encoded_video = encode_file_to_base64(video_filename)
+    
+    payload = {
+        "Phone": phone_number,
+        "Video": f"data:video/mp4;base64,{encoded_video}",
+        "FileName": os.path.basename(video_filename)  # Aquí enviamos solo el nombre del archivo
+    }
+
+    response = requests.post(wuzapi_url_video, json=payload, headers={"token": wuzapi_token})
     print(f"Response from Wuzapi: {response.json()}")
 
 @app.route('/webhook', methods=['POST'])
@@ -102,23 +138,30 @@ def webhook():
             active_sessions[sender] = True  # Marcar la sesión como activa
             if not has_received_catalog(sender):
                 # Utilizar threading para evitar bloquear el webhook
-                threading.Thread(target=send_welcome_and_pdfs_to_client, args=(sender,)).start()
+                threading.Thread(target=send_welcome_pdfs_videos_to_client, args=(sender,)).start()
 
     return jsonify({"status": "success"}), 200
 
-def send_welcome_and_pdfs_to_client(sender):
-    """Envía los mensajes de bienvenida y PDFs al cliente."""
+def send_welcome_pdfs_videos_to_client(sender):
+    """Envía los mensajes de bienvenida, PDFs y videos al cliente."""
     # Enviar mensajes de bienvenida
     for message in welcome_messages:
         send_message(sender, message)
     
     # Enviar PDFs
-    for pdf in pdf_files:
-        send_pdf(sender, pdf)
+    for pdf_filename, pdf_name in zip(pdf_files, pdf_names):
+        send_pdf(sender, pdf_filename, pdf_name)
+
+    # Enviar el mensaje para el primer video antes de enviar el video
+    send_message(sender, first_video_message)
+    
+    # Enviar videos (sin mensajes)
+    for video in video_files:
+        send_video(sender, video)
 
     mark_as_sent(sender)
-    active_sessions.pop(sender, None)  # Eliminar la sesión después de enviar los PDFs
+    active_sessions.pop(sender, None)  # Eliminar la sesión después de enviar los PDFs y videos
     session_locks.pop(sender, None)  # Eliminar el bloqueo de sesión después de completar el envío
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=7774, debug=True)
+    app.run(host='0.0.0.0', port=8765, debug=True)
