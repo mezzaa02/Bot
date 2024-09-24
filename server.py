@@ -33,8 +33,7 @@ video_files = [
     os.path.join(BASE_PATH, "video2.mp4"),
     os.path.join(BASE_PATH, "video3.mp4"),
     os.path.join(BASE_PATH, "video4.mp4"),
-    os.path.join(BASE_PATH, "video5.mp4"),
-    os.path.join(BASE_PATH, "video6.mp4")
+    os.path.join(BASE_PATH, "video5.mp4")
 ]
 
 # Texto para el primer video
