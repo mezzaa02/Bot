@@ -5,6 +5,8 @@ from flask import Flask, request, jsonify
 import os
 import threading
 from threading import Lock
+import unicodedata  # Importado para normalizar textos y eliminar tildes
+
 
 app = Flask(__name__)
 
@@ -13,29 +15,50 @@ BASE_PATH = "./"
 
 # Archivos que contienen los números que ya han recibido los mensajes
 sent_numbers_file = os.path.join(BASE_PATH, "sent_numbers.txt")
-precio_file = os.path.join(BASE_PATH, "precio.txt")  # Cambiado de tienda.txt a precio.txt
+precio_file = os.path.join(BASE_PATH, "precio.txt")
+tienda_file = os.path.join(BASE_PATH, "tienda.txt")  # Archivo para la regla "tienda"
 
 # Bloqueos para acceso a archivos
 sent_numbers_lock = Lock()
-precio_file_lock = Lock()  # Cambiado de tienda_file_lock a precio_file_lock
+precio_file_lock = Lock()
+tienda_file_lock = Lock()
 
 # Nombres de los archivos PDF
-pdf_names = ["RELOJES de Caballero.pdf", "CARTERAS de Dama.pdf", "RELOJES de Dama.pdf", "MORRALES de Dama.pdf", "MORRALES de Caballero.pdf"]
+pdf_names = [
+    "RELOJES de Caballero.pdf",
+    "CARTERAS de Dama.pdf",
+    "RELOJES de Dama.pdf",
+    "MORRALES de Dama.pdf",
+    "MORRALES de Caballero.pdf"
+]
 pdf_files = [os.path.join(BASE_PATH, pdf) for pdf in pdf_names]
+
+# Nombres de los archivos de video para bienvenida
+welcome_video_files = [
+    os.path.join(BASE_PATH, "video1.mp4"),
+    os.path.join(BASE_PATH, "video2.mp4"),
+    os.path.join(BASE_PATH, "video3.mp4"),
+    os.path.join(BASE_PATH, "video4.mp4"),
+    os.path.join(BASE_PATH, "video5.mp4")
+]
+
+# Nombres de los archivos de video para 'tienda'
+tienda_video_files = [
+    os.path.join(BASE_PATH, "impuestos.mp4")
+]
+
+# Nombres de los archivos de imagen para 'tienda'
+image_names = [
+    "tienda1.jpeg",
+    "tienda2.jpeg"
+]
+image_files = [os.path.join(BASE_PATH, img) for img in image_names]
 
 # Mensajes de bienvenida
 welcome_messages = [
     "👋💚 *Buenas* 🤗",
     "Somos empresa 💼 *RUC: 20610868577* Registrada desde *1993* 🥳⭐⭐⭐⭐⭐",
     "✅🩷🩵 Precios *POR DOCENA*\n(si lleva 12 productos *en TOTAL* ) 🛒✨\n▫️⌚Relojes: *50 soles*\n▫️👜Carteras: *50 soles*\n▫️💼Morrales: *50 soles*\n▫️ Billeteras: *20 soles*\n▫️👛Monederos: *15 soles*\n▫️👝Chequeras: *30 soles*\n▫️Correas: *30 soles*"
-]
-
-# Nombres de los archivos de video
-video_files = [
-    os.path.join(BASE_PATH, "video2.mp4"),
-    os.path.join(BASE_PATH, "video3.mp4"),
-    os.path.join(BASE_PATH, "video4.mp4"),
-    os.path.join(BASE_PATH, "video5.mp4")
 ]
 
 # Texto para el primer video
@@ -47,11 +70,35 @@ first_video_message = """🥳Replica *A1 Rolex* ✨😍
 wuzapi_url_text = "http://localhost:8080/chat/send/text"
 wuzapi_url_document = "http://localhost:8080/chat/send/document"
 wuzapi_url_video = "http://localhost:8080/chat/send/video"
+wuzapi_url_image = "http://localhost:8080/chat/send/image"
 wuzapi_token = "jhon"
 
 # Diccionarios para manejar las sesiones y bloqueos por usuario
 active_sessions = {}
 session_locks = {}
+
+# Precodificar los PDFs, videos y imágenes
+encoded_pdfs = {}
+encoded_videos = {}
+encoded_images = {}
+
+def precodificar_archivos():
+    """Precarga y codifica los archivos PDF, videos y imágenes."""
+    for pdf_filename, pdf_name in zip(pdf_files, pdf_names):
+        print(f"Precargando y codificando PDF {pdf_name}")
+        encoded_pdf = encode_file_to_base64(pdf_filename)
+        encoded_pdfs[pdf_name] = encoded_pdf
+
+    for video_filename in welcome_video_files + tienda_video_files:
+        video_name = os.path.basename(video_filename)
+        print(f"Precargando y codificando video {video_name}")
+        encoded_video = encode_file_to_base64(video_filename)
+        encoded_videos[video_name] = encoded_video
+
+    for image_filename, image_name in zip(image_files, image_names):
+        print(f"Precargando y codificando imagen {image_name}")
+        encoded_image = encode_file_to_base64(image_filename)
+        encoded_images[image_name] = encoded_image
 
 def encode_file_to_base64(file_path):
     with open(file_path, "rb") as file:
@@ -81,51 +128,83 @@ def mark_as_precio_sent(phone_number):
         with open(precio_file, 'a') as file:
             file.write(phone_number + '\n')
 
+def has_received_tienda(phone_number):
+    if not os.path.exists(tienda_file):
+        return False
+    with tienda_file_lock:
+        with open(tienda_file, 'r') as file:
+            return phone_number in file.read()
+
+def mark_as_tienda_sent(phone_number):
+    with tienda_file_lock:
+        with open(tienda_file, 'a') as file:
+            file.write(phone_number + '\n')
+
 def send_message(phone_number, message_text):
     """Función para enviar un mensaje de texto."""
     print(f"Enviando mensaje: {message_text} a {phone_number}")
-    
     payload = {
         "Phone": phone_number,
         "Body": message_text
     }
-
     response = requests.post(wuzapi_url_text, json=payload, headers={"token": wuzapi_token})
     print(f"Respuesta de Wuzapi: {response.json()}")
 
-def send_pdf(phone_number, pdf_filename, pdf_name):
-    """Función para enviar un PDF."""
+def send_pdf(phone_number, pdf_name):
+    """Función para enviar un PDF precodificado."""
     print(f"Enviando PDF {pdf_name} a {phone_number}")
-    
-    encoded_pdf = encode_file_to_base64(pdf_filename)
-    
+    encoded_pdf = encoded_pdfs.get(pdf_name)
+    if not encoded_pdf:
+        print(f"Error: PDF {pdf_name} no está precodificado.")
+        return
     payload = {
         "Phone": phone_number,
         "Document": f"data:application/octet-stream;base64,{encoded_pdf}",
         "FileName": pdf_name
     }
-
     response = requests.post(wuzapi_url_document, json=payload, headers={"token": wuzapi_token})
     print(f"Respuesta de Wuzapi: {response.json()}")
 
-def send_video(phone_number, video_filename):
-    """Función para enviar un video sin texto."""
-    if not os.path.exists(video_filename):
-        print(f"Error: {video_filename} no existe.")
+def send_video(phone_number, video_name, caption=None):
+    """Función para enviar un video precodificado."""
+    print(f"Enviando video {video_name} a {phone_number}")
+    encoded_video = encoded_videos.get(video_name)
+    if not encoded_video:
+        print(f"Error: Video {video_name} no está precodificado.")
         return
-    
-    print(f"Enviando video {video_filename} a {phone_number}")
-    
-    encoded_video = encode_file_to_base64(video_filename)
-    
     payload = {
         "Phone": phone_number,
         "Video": f"data:video/mp4;base64,{encoded_video}",
-        "FileName": os.path.basename(video_filename)
+        "FileName": video_name
     }
-
+    if caption:
+        payload["Caption"] = caption
+    elif video_name == "video1.mp4":
+        payload["Caption"] = first_video_message
     response = requests.post(wuzapi_url_video, json=payload, headers={"token": wuzapi_token})
     print(f"Respuesta de Wuzapi: {response.json()}")
+
+def send_image(phone_number, image_name, caption):
+    """Función para enviar una imagen precodificada."""
+    print(f"Enviando imagen {image_name} a {phone_number}")
+    encoded_image = encoded_images.get(image_name)
+    if not encoded_image:
+        print(f"Error: Imagen {image_name} no está precodificada.")
+        return
+    payload = {
+        "Phone": phone_number,
+        "Image": f"data:image/jpeg;base64,{encoded_image}",
+        "FileName": image_name,
+        "Caption": caption
+    }
+    response = requests.post(wuzapi_url_image, json=payload, headers={"token": wuzapi_token})
+    print(f"Respuesta de Wuzapi: {response.json()}")
+
+def remove_accents(input_str):
+    """Función para eliminar tildes y acentos de un texto."""
+    nfkd_form = unicodedata.normalize('NFKD', input_str)
+    return ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
+
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -154,93 +233,265 @@ def webhook():
     except KeyError:
         pass  # El mensaje puede no contener 'conversation' en algunos casos
 
-     # Procesar el texto del mensaje para verificar palabras clave
-    keywords = ["cuantos", "kuantos", "cuanto", "kuanto", "knto",
-    "mínimo", "minimo", "mínim", "minim", "mín.",
-    "pedido", "ped", "pido", "pedidos", "pidos",
-    "cotización", "cotizacion", "cotisación", "cotisacion", "kotización", "kotizacion", "kotisación", "kotisacion",
-    "interés", "interes", "interéz", "interez", "interesa", "intereza", 
-    "necesito", "nesesito", "necesitó", "nesesitó", "necesita", "nesesita", "necesitá", "nesesitá",
-    "quisiera", "kisiera", "quisierá", "kisierá", "kiziera", "quisierá",
-    "ventá", "venta", "vta", "vtas", "ventas", 
-    "mayoréo", "mayoreo", "mayorista", "mayorístas", "mayoristas", "mayoría", "mayoria", 
-    "reloj", "relojes", "relojéz", "relojesz",
-    "gshock", "gshok", "gshóc", "gshoc", 
-    "rolex", "rolez", "roléx", "rolx", "r0lex",
-    "sé", "se",
-    "té", "te",
-    "cuánto", "cuanto", "kuánto", "kuanto", "kánto", "kanto", "kuántos", "kuantos", "kántos", "kantos", 
-    "precio", "preció", "presió", "prezió", "prció", "preco", "prezó", "prció",
-    "perció", "prazió", "preçió", "preçios", "preçi0", "pr3ció", "preçi0s",
-    "undidad", "unidád", "unidá.", "unidádes",
-    "pieza", "piezá", "pz", "piezas", "pzás", "pzs",
-    "dozéna", "docena", "docénas", "dozenas",
-    "ócho", "ocho", "ochó", "och0",
-    "cinco", "cínco", "5nco", "5",
-    "séis", "seis", "seís", "6",
-    "síete", "siete", "síete", "7te",
-    "nueve", "núeve", "nuevé", "9ve",
-    "diez", "diéz", "diézz", "di10z",
-    "veinte", "veínte", "veintez", "20inte",
-    "séis", "seís", "ceys", "6eís",
-    "costo", "kosto", "coste", "koste","a","si","en","y","por","el","de","a", "ante", "bajo", "cabe", "con", "contra", "de", "desde", "durante", 
-    "en", "entre", "hacia", "hasta", "mediante", "para", "por", "según", 
-    "sin", "so", "sobre", "tras","precio", "presio", "prezio", "prezio", "precios", "presios", "prezios",
-    "prcio", "przio", "przo", "prco", "prec", "prc", "pre", "prcio", "prezo", "preco",
-    "percio", "prazio", "preçio", "preçios", "preçi0", "pr3cio", "preçi0s",
-    "unidad", "unid", "unids", "unid.", "und", "unds", "unds.","unida","u","un","uni","unid","unida",
-    "unidades", "unidaddes", "uniadades", "unidadd", "unidads", "unidats",
-    "ud", "uds", "ud.", "uds.", "u.", "u", "uni", "un", "uns",
-    "undidad", "unidá", "unidá.", "unidádes",
-    "pieza", "pza", "pz", "piezas", "pzas", "pzs",
-    "docena", "dozena", "docna", "docnea", "docen", "dozen",
-    "docenas", "dozenas", "docenaz", "dozenaz",
-    "doce", "doze", "d0ce", "d0ze", "doçe",
-    "doc", "doz", "dz", "dza", "dzn",
-    "12", "1docena", "1dozena", "uno2", "unodos",
-    "media", "meia", "1/2", "6", "seis",
-    "oferta", "ofrta", "ofrt", "ofertas", "ofrtas", "ofrts",
-    "descuento", "deskuento", "desc", "dcto", "dctos",
-    "promo", "promos", "promocion", "promozion", "promociones", "promoziones",
-    "cantidad", "cant", "cantd", "cantid", "kantidad", "kantidad",
-    "volumen", "vol", "volum", "volúmen", "volúmenes",
-    "lote", "lot", "lots", "lotes",
-    "mínimo", "minimo", "minim", "mínim", "min", "min.",
-    "pedido", "ped", "pido", "pedidos", "pidos",
-    "cotizacion", "cotiz", "cotisacion", "kotizacion", "kotisacion",
-    "interesa", "intereza", "interes", "interez",
-    "necesito", "nesesito", "nesecito", "nececito",
-    "quisiera", "kisiera", "kiziera", "kisier",
-    "venta", "vta", "vtas", "ventas",
-    "mayoreo", "mayorista", "mayoristas", "mayoréo",
-    "mayor", "mayores", "mayoria",
-    "reloj", "relojes", "relojz", "rloj", "rlojes", "relojes",
-    "gshock", "gshok", "gshoc", "gsh0ck", "gsh0c", "gshockz",
-    "rolex", "rolez", "rolx", "r0lex", "rolexz", "rolexes",
-    "uno", "u1", "un", "1n", "uno", "uno.", "unn", "uno1", "un0", "uun",
-    "dos", "d0s", "2", "doz", "doss", "dosz", "dós", "d0z", "d0ss", "dosss", 
-    "tres", "3s", "3", "tr3s", "tresz", "tress", "trezz", "tre3z", 
-    "cuatro", "4tro", "4", "kuatro", "cu4tro", "quat", "cua4tro", "k4tro", 
-    "cinco", "5nco", "5", "sinko", "cincoo", "cinko", "s1nco", 
-    "seis", "6is", "6", "seiss", "seyz", "ceys", "6eis", 
-    "siete", "7te", "7", "s1ete", "site", "si7e", 
-    "ocho", "8cho", "8", "ochoo", "och0", "och", 
-    "nueve", "9ve", "9", "nve", "nu3ve", "nuevve", "nuevev", 
-    "diez", "10z", "10", "diz", "diezz", "di10z", 
-    "once", "11ce", "11", "onz", "oncez", "oncez.", 
-    "doce", "12ce", "12", "doc", "doz", "d0z", 
-    "trece", "13ce", "13", "t13ce", "trecz", "treczz", 
-    "catorce", "14rce", "14", "kat0rce", "quatorce", "kat1rce", 
-    "quince", "15nce", "15", "qince", "k1nce", "quinz", 
-    "dieciseis", "16ciseis", "16", "d16", "di3ci6eis", 
-    "diecisiete", "17ciseite", "17", "17c", "di3ci7", 
-    "dieciocho", "18c1cho", "18", "diec1och0", "18cho", 
-    "diecinueve", "19cinve", "19", "diec1nueve", "19nv", 
-    "veinte", "20inte", "20", "ve1nte", "viente", "v20", "ve1nt", 
-    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
-    
-    
-    message_lower = message_text.lower()
+    # Listado de palabras clave para la regla "tienda"
+    tienda_keywords = [
+    # Palabras originales y sus variaciones/abreviaturas, todas sin tildes
+    'donde', 'dnd', 'dnde',
+    'estan', 'estn', 'est',
+    'ubicados', 'ubicado', 'ubicar', 'ubi', 'ubic',
+    'envios', 'envio', 'env', 'envi',
+    'local', 'locales', 'loc',
+    'fisico', 'fisica', 'fisic', 'fis',
+    'tienda', 'tiend', 'tda', 'tnd',
+    'delivery', 'deliviri', 'delibery', 'deliv', 'del',
+    'presencial', 'presencialmente', 'presenc', 'presen',
+    'son', 'som',
+    'ubicar', 'ubica', 'ubicas', 'ubic',
+    'provincia', 'provincias', 'provin', 'prov',
+    'contraentrega', 'contrentrega', 'cntraentrega', 'contra',
+    'entrega', 'entregas', 'entregar', 'entreg',
+    'pago', 'pagos', 'pagar', 'pag',
+    'deposito', 'deposit', 'dep',
+    'transferencia', 'transfer', 'transf', 'trans',
+    'yape', 'yap',
+    'hacia', 'haci',
+    'hacen', 'hace', 'hac', 'ace',
+    'metodo', 'metodos', 'metod', 'met',
+    'lima', 'limas', 'lma',
+    'arequipa', 'aqp',
+    'tacna',
+    'peru',
+    'parte', 'partes', 'part',
+    'queda', 'quedan', 'qued',
+    'somos', 'soy', 'son', 'som',
+    'shalom',
+    'olva',
+    'enviaria', 'enviar', 'envia',
+    'pruebas', 'prueba', 'prueb',
+    'confianza', 'confian', 'conf',
+    'estafa', 'estafas', 'estaf',
+    'seguridad', 'seguro', 'segur',
+    'nuevo', 'nueva', 'nuev',
+    'comprar', 'compra', 'compr',
+    'tiene', 'tienen', 'tien',
+    'personal', 'persona', 'person',
+    'traer', 'trae', 'traes', 'tra',
+    'puedes', 'puede', 'pued',
+    'dar', 'doy', 'da',
+    'importados', 'importado', 'import',
+    'agencia', 'agencias', 'agen',
+    'dias', 'dia',
+    'cuantos', 'cuanto', 'cuant',
+    'demora', 'demoraria', 'demor',
+    'envio', 'env',
+    'para', 'par',
+    'deliviri', 'delibery', 'deliv',
+    'motorizado', 'motorizados', 'motoriz',
+    'ubi', 'ubic',
+    'localizacion', 'localiz',
+    'haces', 'ace', 'hac',
+    'quiero', 'quieres', 'quier',
+    'ases', 'ace',
+    'hora', 'horas', 'hor',
+    'interesado', 'interes', 'interesa',
+    'medios', 'medio', 'medi',
+    'adquirir', 'adquir',
+    'estamos', 'esta', 'estan',
+    'momento', 'momentos', 'moment',
+    'aka', 'aca',
+    'asta', 'hasta', 'ast',
+    'traiga', 'traig',
+    'viajo', 'viaja', 'viaj',
+    'fuera', 'fuer',
+    'estoy', 'esta',
+    'trabajo', 'trabaja', 'trabaj',
+    'alla',
+    'recogerlo', 'recoger', 'recog',
+    'entregas', 'entregar', 'entreg',
+    'adelantado', 'adelantar', 'adelant',
+    'enviar', 'envia', 'envi',
+    'domicilio', 'domic',
+    'ventanilla', 'ventan',
+    'todo', 'toda', 'todas', 'todos', 'tod',
+    'ubico', 'ubic',
+    'cusco',
+    'encuentran', 'encuentra', 'encontr',
+    'recoje', 'recoge', 'recog',
+    'llega', 'llegar', 'lleg',
+    'cuando', 'cuand',
+    'asen', 'hacen', 'hace', 'hac',
+    'provincias', 'provincia', 'provin', 'prov',
+    'como', 'cm',
+    'es',
+    'xk', 'xq', 'por que', 'porque',
+    'trujillo',
+    'quieras', 'quier',
+    'gratis', 'grat',
+    'domde', 'donde', 'dnd',
+    'eres', 'er',
+    'x',
+    'adelantado', 'adelant',
+    'adelante', 'adelant',
+    'primero', 'primer', 'prim',
+    'seguro', 'segur',
+    'adicional', 'adicion',
+    'pedido', 'pedidos', 'pedir', 'ped',
+    'distrito', 'distritos', 'distr',
+    'acercarme', 'acercar', 'acerc',
+    'ciudad', 'ciud',
+    'ustedes', 'usted', 'uds', 'ud',
+    'lugar', 'lugares', 'lug',
+    'otro', 'otros', 'otra', 'otr',
+    'hacer', 'hacen', 'hace', 'hac',
+    'podriamos', 'podria', 'podr',
+    'tienen', 'tiene', 'tien',
+    'domiciliado', 'domicili',
+    'verlos', 'verlo', 'ver',
+    'persona', 'personal', 'person',
+    'visitar', 'visita', 'visit',
+    'enviarte', 'enviar', 'envia',
+    'contacto', 'contact',
+    'avion', 'avio',
+    'cercado', 'cerca', 'cerc',
+    'nacional', 'nacion',
+    'nivel', 'niveles', 'niv',
+    'mandan', 'manda', 'mand',
+    'sitios', 'sitio', 'siti',
+    'canete',
+    'su','lima', 'lim', 'lma',
+    'arequipa', 'aqp', 'areq', 'areqpa',
+    'cusco', 'cus', 'cusc',
+    'trujillo', 'truji', 'truj',
+    'chiclayo', 'chicla', 'chic',
+    'piura', 'piur',
+    'iquitos', 'iquit', 'iqt',
+    'pucallpa', 'pucall', 'puc',
+    'tacna', 'tac',
+    'huancayo', 'huanca', 'huanc',
+    'juliaca', 'julia', 'jul',
+    'ica', 'ic',
+    'cajamarca', 'cajamar', 'caj',
+    'ayacucho', 'ayacuch', 'aya',
+    'puno', 'pun',
+    'tarapoto', 'tarap', 'tarapot',
+    'chimbote', 'chimbo', 'chimb',
+    'moquegua', 'moqueg', 'moq',
+    'huanuco', 'huanuc', 'huan',
+    'abancay', 'abanc', 'aban',
+    'huaraz', 'huara', 'huar',
+    'tumbes', 'tumb',
+    'puerto maldonado', 'puerto maldo', 'p maldonado', 'pmald',
+    'ica', 'ic',
+    'talara', 'talar',
+    'huacho', 'huach',
+    'cerro de pasco', 'cerro pasco', 'c pasco', 'cpasco',
+    'sullana', 'sullan', 'sull',
+    'cuzco', 'cuz',
+    'pisco', 'pisc',
+    'bagua', 'bag',
+    'jaen', 'jae',
+    'moyobamba', 'moyobamb', 'moyo',
+    'yurimaguas', 'yurimagu', 'yuri',
+    'huaral', 'huara',
+    'satipo', 'sati',
+    'mollendo', 'mollen', 'moll',
+    'barranca', 'barranc', 'barr',
+    'chepen', 'chep',
+    'puquio', 'puqui',
+    'tarma', 'tarm',
+    'chincha', 'chinch',
+    'paita', 'pait',
+    'camaná', 'camana', 'caman',
+    'pucusana', 'pucusan', 'pucu',
+    'lunahuana', 'lunahuan', 'luna',
+    'chincheros', 'chincher', 'chinch',
+    'ocros', 'ocr',
+    'paramonga', 'paramong', 'param',
+    'chancay', 'chanca', 'chan',
+    'rioja', 'rioj',
+    'tocache', 'tocach', 'toc',
+    'la merced', 'l merced', 'lmerced',
+    'chilca', 'chilc',
+    'ancón', 'ancon', 'anco',
+    'pisco', 'pisc',
+    'ferreñafe', 'ferrenafe', 'ferren',
+    'sechura', 'sechur', 'sech',
+    'mochumi', 'mochum',
+    'ilave', 'ilav',
+    'san ignacio', 's ignacio', 's. ignacio',
+    'casma', 'casm',
+    'huanta', 'huant',
+    'huaytará', 'huaytara', 'huayt',
+    'catacaos', 'catacao', 'catac',
+    'tarma', 'tarm',
+    'tocache', 'tocach', 'toc',
+    'moyobamba', 'moyobamb', 'moyo',
+    'pichanaki', 'pichanak', 'pich',
+    'zarumilla', 'zarumill', 'zaru',
+    'nazca', 'nazc',
+    'chachapoyas', 'chachapoy', 'chacha',
+    'san vicente de cañete', 'san vicente', 's vicente', 'cañete', 'canete',
+    'huancavelica', 'huancav', 'huanc',
+    'callao', 'calla',
+    'colán', 'colan', 'cola',
+    'cutervo', 'cuterv', 'cut',
+    'chulucanas', 'chulucan', 'chulu',
+    'reque', 'req',
+    'tumbes', 'tumb',
+    'zarate', 'zarat',
+    'chachapoyas', 'chachapoy', 'chacha',
+    'otros', 'otra', 'otr',
+    'se',
+    'limas', 'lima', 'lma',
+    'partes', 'parte', 'part',
+    'todes', 'toda', 'todos', 'tod',
+    'encomienda', 'encomiendas', 'encomiend',
+    'ir', 'voy', 'va',
+    'iremos', 'ire',
+    'visitaremos', 'visitar', 'visit',
+    'estaremos', 'estar', 'esta',
+    'hora', 'horas', 'hor',
+    'atienden', 'atiende', 'atend',
+    'venden', 'vende', 'vend',
+    'publicidad', 'publica', 'public',
+    'cancela', 'cancelar', 'cancel',
+    'mano', 'manos', 'man',
+    'exacta', 'exacto', 'exact',
+    'diferencias', 'diferentes', 'diferent', 'diferenc',
+    'ubicada', 'ubicado', 'ubicar', 'ubic',
+    'cofnirmas', 'confirmas', 'confirmar', 'confirm',
+    'dejar', 'dej',
+    'traes', 'trae', 'tra',
+    'verdad', 'verd',
+    'mandar', 'manda', 'mand',
+    'ate',
+    'llegan', 'llega', 'lleg',
+    'encontrarte', 'encontrar', 'encontr',
+    'podemos', 'pueden', 'puede', 'pod',
+    'hoy',
+    'manana',
+    'encontrarlos', 'encontrar', 'encontr',
+    'llegue', 'llegar', 'lleg',
+    'modo', 'modos', 'mod',
+    'comas',
+    'saber', 'sabes', 'sab',
+    'conocer', 'conoces', 'conoc',
+    'plaza', 'plaz',
+    'zona', 'zonas', 'zon',
+    'ahorita', 'ahora', 'ahor',
+    'favor', 'fav',
+    'hacemos', 'hace', 'hac',
+    'tren', 'trenes', 'tren',
+    'estacion',
+    'podrias', 'podrian', 'podria', 'podr',
+    'flores', 'flor',
+    'pago', 'pagos', 'pag','pgo',
+    'llegar', 'llega', 'lleg',
+    ]
+
+    # Normalizar el texto del mensaje y las palabras clave
+
+    message_normalized = remove_accents(message_text).lower()
 
     # Asegurar que solo un hilo procese la interacción de un cliente
     if sender not in session_locks:
@@ -254,10 +505,12 @@ def webhook():
                 threading.Thread(target=send_welcome_pdfs_videos_to_client, args=(sender,)).start()
         else:
             # Ya ha recibido los mensajes de bienvenida
-            #if any(keyword in message_lower for keyword in keywords):
-                # El mensaje contiene una de las palabras clave
-                if not has_received_precio(sender):
-                    threading.Thread(target=send_precio_message, args=(sender,)).start()
+            if any(keyword in message_normalized for keyword in tienda_keywords):
+                # Prioridad a la regla "tienda"
+                if not has_received_tienda(sender):
+                    threading.Thread(target=send_tienda_messages, args=(sender,)).start()
+            elif not has_received_precio(sender):
+                threading.Thread(target=send_precio_message, args=(sender,)).start()
 
     return jsonify({"status": "success"}), 200
 
@@ -273,26 +526,57 @@ def send_precio_message(sender):
     # Limpiar la sesión y el bloqueo
     session_locks.pop(sender, None)
 
+def send_tienda_messages(sender):
+    """Envía las imágenes y video de la tienda al cliente."""
+    try:
+        # Enviar la primera imagen con su caption
+        image1_name = "tienda1.jpeg"
+        image1_caption = "📍Tenemos *TIENDA FÍSICA* en la *Zona Franca del Perú* 🚚 *Mz K Lote 08* 🙌🏻✨ 🤩Ciudad de *TACNA, Perú* 🇵🇪"
+        send_image(sender, image1_name, image1_caption)
+        
+        # Enviar la segunda imagen con su caption
+        image2_name = "tienda2.jpeg"
+        image2_caption = "Nosotros somos *PROVEEDORES* de *acá de la Zona Económica Especial de TACNA*✨🤗🫱🏻‍🫲🏻"
+        send_image(sender, image2_name, image2_caption)
+        
+        # Enviar el video con su caption
+        video_name = "impuestos.mp4"
+        video_caption = """🤩Trabajamos en la *Zona Franca del Perú* pues es zona *LIBRE DE IMPUESTOS* 🥳✨🫱🏻‍🫲🏻"""
+        send_video(sender, video_name, caption=video_caption)
+        
+        # Enviar el mensaje de texto
+        message = """*Contraentrega* en toda Tacna 
+
+Entregamos *personalmente a domicilio*"""
+        send_message(sender, message)
+        
+        mark_as_tienda_sent(sender)
+    finally:
+        # Limpiar la sesión y el bloqueo
+        session_locks.pop(sender, None)
+
 def send_welcome_pdfs_videos_to_client(sender):
     """Envía los mensajes de bienvenida, PDFs y videos al cliente."""
-    # Enviar mensajes de bienvenida
-    for message in welcome_messages:
-        send_message(sender, message)
-    
-    # Enviar PDFs
-    for pdf_filename, pdf_name in zip(pdf_files, pdf_names):
-        send_pdf(sender, pdf_filename, pdf_name)
+    try:
+        # Enviar mensajes de bienvenida
+        for message in welcome_messages:
+            send_message(sender, message)
 
-    # Enviar el mensaje para el primer video antes de enviar el video
-    send_message(sender, first_video_message)
-    
-    # Enviar videos
-    for video in video_files:
-        send_video(sender, video)
+        # Enviar PDFs
+        for pdf_name in pdf_names:
+            send_pdf(sender, pdf_name)
 
-    mark_as_sent(sender)
-    active_sessions.pop(sender, None)
-    session_locks.pop(sender, None)
+        # Enviar videos
+        for video_filename in welcome_video_files:
+            video_name = os.path.basename(video_filename)
+            send_video(sender, video_name)
+
+        mark_as_sent(sender)
+    finally:
+        active_sessions.pop(sender, None)
+        session_locks.pop(sender, None)
 
 if __name__ == '__main__':
+    # Precargar y codificar los archivos antes de iniciar el servidor
+    precodificar_archivos()
     app.run(host='0.0.0.0', port=8765, debug=True)
