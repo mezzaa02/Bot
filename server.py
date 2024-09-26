@@ -3,6 +3,7 @@ import base64
 import requests
 from flask import Flask, request, jsonify
 import os
+import time
 import threading
 from threading import Lock
 import unicodedata  # Importado para normalizar textos y eliminar tildes
@@ -204,6 +205,22 @@ def remove_accents(input_str):
     """Función para eliminar tildes y acentos de un texto."""
     nfkd_form = unicodedata.normalize('NFKD', input_str)
     return ''.join([c for c in nfkd_form if not unicodedata.combining(c)])
+
+def start_wuzapi():
+    # URL de inicio de sesión
+    login_url = "http://localhost:8080/login/?token=jhon"
+    
+    try:
+        # Intentamos hacer una solicitud GET al URL de login para iniciar Wuzapi
+        response = requests.get(login_url)
+        
+        if response.status_code == 200:
+            print("Iniciado correctamente en Wuzapi.")
+        else:
+            print(f"Error al iniciar sesión en Wuzapi: {response.status_code}")
+            
+    except requests.exceptions.RequestException as e:
+        print(f"Error de conexión: {e}")
 
 
 @app.route('/webhook', methods=['POST'])
@@ -579,4 +596,7 @@ def send_welcome_pdfs_videos_to_client(sender):
 if __name__ == '__main__':
     # Precargar y codificar los archivos antes de iniciar el servidor
     precodificar_archivos()
+
+    start_wuzapi()
+
     app.run(host='0.0.0.0', port=8765, debug=True)
