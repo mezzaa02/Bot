@@ -154,8 +154,92 @@ def webhook():
     except KeyError:
         pass  # El mensaje puede no contener 'conversation' en algunos casos
 
-    # Procesar el texto del mensaje para verificar palabras clave
-    keywords = ["docena","docena","cuanto","costo", "unidad","unidades", "precios", "precios"]
+     # Procesar el texto del mensaje para verificar palabras clave
+    keywords = ["cuantos", "kuantos", "cuanto", "kuanto", "knto",
+    "mínimo", "minimo", "mínim", "minim", "mín.",
+    "pedido", "ped", "pido", "pedidos", "pidos",
+    "cotización", "cotizacion", "cotisación", "cotisacion", "kotización", "kotizacion", "kotisación", "kotisacion",
+    "interés", "interes", "interéz", "interez", "interesa", "intereza", 
+    "necesito", "nesesito", "necesitó", "nesesitó", "necesita", "nesesita", "necesitá", "nesesitá",
+    "quisiera", "kisiera", "quisierá", "kisierá", "kiziera", "quisierá",
+    "ventá", "venta", "vta", "vtas", "ventas", 
+    "mayoréo", "mayoreo", "mayorista", "mayorístas", "mayoristas", "mayoría", "mayoria", 
+    "reloj", "relojes", "relojéz", "relojesz",
+    "gshock", "gshok", "gshóc", "gshoc", 
+    "rolex", "rolez", "roléx", "rolx", "r0lex",
+    "sé", "se",
+    "té", "te",
+    "cuánto", "cuanto", "kuánto", "kuanto", "kánto", "kanto", "kuántos", "kuantos", "kántos", "kantos", 
+    "precio", "preció", "presió", "prezió", "prció", "preco", "prezó", "prció",
+    "perció", "prazió", "preçió", "preçios", "preçi0", "pr3ció", "preçi0s",
+    "undidad", "unidád", "unidá.", "unidádes",
+    "pieza", "piezá", "pz", "piezas", "pzás", "pzs",
+    "dozéna", "docena", "docénas", "dozenas",
+    "ócho", "ocho", "ochó", "och0",
+    "cinco", "cínco", "5nco", "5",
+    "séis", "seis", "seís", "6",
+    "síete", "siete", "síete", "7te",
+    "nueve", "núeve", "nuevé", "9ve",
+    "diez", "diéz", "diézz", "di10z",
+    "veinte", "veínte", "veintez", "20inte",
+    "séis", "seís", "ceys", "6eís",
+    "costo", "kosto", "coste", "koste","a","si","en","y","por","el","de","a", "ante", "bajo", "cabe", "con", "contra", "de", "desde", "durante", 
+    "en", "entre", "hacia", "hasta", "mediante", "para", "por", "según", 
+    "sin", "so", "sobre", "tras","precio", "presio", "prezio", "prezio", "precios", "presios", "prezios",
+    "prcio", "przio", "przo", "prco", "prec", "prc", "pre", "prcio", "prezo", "preco",
+    "percio", "prazio", "preçio", "preçios", "preçi0", "pr3cio", "preçi0s",
+    "unidad", "unid", "unids", "unid.", "und", "unds", "unds.","unida","u","un","uni","unid","unida",
+    "unidades", "unidaddes", "uniadades", "unidadd", "unidads", "unidats",
+    "ud", "uds", "ud.", "uds.", "u.", "u", "uni", "un", "uns",
+    "undidad", "unidá", "unidá.", "unidádes",
+    "pieza", "pza", "pz", "piezas", "pzas", "pzs",
+    "docena", "dozena", "docna", "docnea", "docen", "dozen",
+    "docenas", "dozenas", "docenaz", "dozenaz",
+    "doce", "doze", "d0ce", "d0ze", "doçe",
+    "doc", "doz", "dz", "dza", "dzn",
+    "12", "1docena", "1dozena", "uno2", "unodos",
+    "media", "meia", "1/2", "6", "seis",
+    "oferta", "ofrta", "ofrt", "ofertas", "ofrtas", "ofrts",
+    "descuento", "deskuento", "desc", "dcto", "dctos",
+    "promo", "promos", "promocion", "promozion", "promociones", "promoziones",
+    "cantidad", "cant", "cantd", "cantid", "kantidad", "kantidad",
+    "volumen", "vol", "volum", "volúmen", "volúmenes",
+    "lote", "lot", "lots", "lotes",
+    "mínimo", "minimo", "minim", "mínim", "min", "min.",
+    "pedido", "ped", "pido", "pedidos", "pidos",
+    "cotizacion", "cotiz", "cotisacion", "kotizacion", "kotisacion",
+    "interesa", "intereza", "interes", "interez",
+    "necesito", "nesesito", "nesecito", "nececito",
+    "quisiera", "kisiera", "kiziera", "kisier",
+    "venta", "vta", "vtas", "ventas",
+    "mayoreo", "mayorista", "mayoristas", "mayoréo",
+    "mayor", "mayores", "mayoria",
+    "reloj", "relojes", "relojz", "rloj", "rlojes", "relojes",
+    "gshock", "gshok", "gshoc", "gsh0ck", "gsh0c", "gshockz",
+    "rolex", "rolez", "rolx", "r0lex", "rolexz", "rolexes",
+    "uno", "u1", "un", "1n", "uno", "uno.", "unn", "uno1", "un0", "uun",
+    "dos", "d0s", "2", "doz", "doss", "dosz", "dós", "d0z", "d0ss", "dosss", 
+    "tres", "3s", "3", "tr3s", "tresz", "tress", "trezz", "tre3z", 
+    "cuatro", "4tro", "4", "kuatro", "cu4tro", "quat", "cua4tro", "k4tro", 
+    "cinco", "5nco", "5", "sinko", "cincoo", "cinko", "s1nco", 
+    "seis", "6is", "6", "seiss", "seyz", "ceys", "6eis", 
+    "siete", "7te", "7", "s1ete", "site", "si7e", 
+    "ocho", "8cho", "8", "ochoo", "och0", "och", 
+    "nueve", "9ve", "9", "nve", "nu3ve", "nuevve", "nuevev", 
+    "diez", "10z", "10", "diz", "diezz", "di10z", 
+    "once", "11ce", "11", "onz", "oncez", "oncez.", 
+    "doce", "12ce", "12", "doc", "doz", "d0z", 
+    "trece", "13ce", "13", "t13ce", "trecz", "treczz", 
+    "catorce", "14rce", "14", "kat0rce", "quatorce", "kat1rce", 
+    "quince", "15nce", "15", "qince", "k1nce", "quinz", 
+    "dieciseis", "16ciseis", "16", "d16", "di3ci6eis", 
+    "diecisiete", "17ciseite", "17", "17c", "di3ci7", 
+    "dieciocho", "18c1cho", "18", "diec1och0", "18cho", 
+    "diecinueve", "19cinve", "19", "diec1nueve", "19nv", 
+    "veinte", "20inte", "20", "ve1nte", "viente", "v20", "ve1nt", 
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20"]
+    
+    
     message_lower = message_text.lower()
 
     # Asegurar que solo un hilo procese la interacción de un cliente
@@ -170,7 +254,7 @@ def webhook():
                 threading.Thread(target=send_welcome_pdfs_videos_to_client, args=(sender,)).start()
         else:
             # Ya ha recibido los mensajes de bienvenida
-            if any(keyword in message_lower for keyword in keywords):
+            #if any(keyword in message_lower for keyword in keywords):
                 # El mensaje contiene una de las palabras clave
                 if not has_received_precio(sender):
                     threading.Thread(target=send_precio_message, args=(sender,)).start()
