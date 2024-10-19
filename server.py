@@ -3,11 +3,9 @@ import base64
 import requests
 from flask import Flask, request, jsonify
 import os
-import time
 import threading
 from threading import Lock
 import unicodedata  # Importado para normalizar textos y eliminar tildes
-
 
 app = Flask(__name__)
 
@@ -75,7 +73,7 @@ wuzapi_url_image = "http://localhost:8080/chat/send/image"
 wuzapi_token = "jhon"
 
 # Diccionarios para manejar las sesiones y bloqueos por usuario
-active_sessions = {}
+active_sessions = {}  # Cambiado para ser un diccionario de diccionarios
 session_locks = {}
 
 # Precodificar los PDFs, videos y imágenes
@@ -222,7 +220,6 @@ def start_wuzapi():
     except requests.exceptions.RequestException as e:
         print(f"Error de conexión: {e}")
 
-
 @app.route('/webhook', methods=['POST'])
 def webhook():
     # Obtener los datos entrantes
@@ -252,8 +249,7 @@ def webhook():
 
     # Listado de palabras clave para la regla "tienda"
     tienda_keywords = [
-    # Palabras originales y sus variaciones/abreviaturas, todas sin tildes
-    'donde', 'dnd', 'dnde',
+        'donde', 'dnd', 'dnde',
     'estan', 'estn', 'est',
     'ubicados', 'ubicado', 'ubicar', 'ubi', 'ubic',
     'envios', 'envio', 'env', 'envi',
@@ -506,8 +502,7 @@ def webhook():
     'llegar', 'llega', 'lleg',
     ]
 
-    # Normalizar el texto del mensaje y las palabras clave
-
+    # Normalizar el texto del mensaje y eliminar tildes
     message_normalized = remove_accents(message_text).lower()
 
     # Asegurar que solo un hilo procese la interacción de un cliente
@@ -518,30 +513,56 @@ def webhook():
         if not has_received_catalog(sender):
             # Es la primera vez que nos contacta, enviar mensajes de bienvenida
             if sender not in active_sessions:
-                active_sessions[sender] = True
+                active_sessions[sender] = {}
+            if 'welcome' not in active_sessions[sender]:
+                active_sessions[sender]['welcome'] = True
                 threading.Thread(target=send_welcome_pdfs_videos_to_client, args=(sender,)).start()
+            else:
+                print(f"Welcome messages already being sent to {sender}, not starting another thread.")
         else:
             # Ya ha recibido los mensajes de bienvenida
             if any(keyword in message_normalized for keyword in tienda_keywords):
                 # Prioridad a la regla "tienda"
                 if not has_received_tienda(sender):
-                    threading.Thread(target=send_tienda_messages, args=(sender,)).start()
+                    if sender not in active_sessions:
+                        active_sessions[sender] = {}
+                    if 'tienda' not in active_sessions[sender]:
+                        active_sessions[sender]['tienda'] = True
+                        threading.Thread(target=send_tienda_messages, args=(sender,)).start()
+                    else:
+                        print(f"Tienda messages already being sent to {sender}, not starting another thread.")
+                else:
+                    print(f"Tienda messages already sent to {sender}.")
             elif not has_received_precio(sender):
-                threading.Thread(target=send_precio_message, args=(sender,)).start()
+                if sender not in active_sessions:
+                    active_sessions[sender] = {}
+                if 'precio' not in active_sessions[sender]:
+                    active_sessions[sender]['precio'] = True
+                    threading.Thread(target=send_precio_message, args=(sender,)).start()
+                else:
+                    print(f"Precio messages already being sent to {sender}, not starting another thread.")
 
     return jsonify({"status": "success"}), 200
 
 def send_precio_message(sender):
-    # Enviar los dos mensajes solicitados
-    messages = [
-        "⌚Por DOCENA relojes 50 soles",
-        "¿Cuántas unidades desea llevar? 🙌☺️"
-    ]
-    for message in messages:
-        send_message(sender, message)
-    mark_as_precio_sent(sender)
-    # Limpiar la sesión y el bloqueo
-    session_locks.pop(sender, None)
+    try:
+        # Enviar los dos mensajes solicitados
+        messages = [
+            "⌚ *Por DOCENA* relojes *50 soles*",
+            "¿Cuántas unidades desea llevar? 🙌☺️",
+            "70 soles le podemos dejar *por unidad*"
+        ]
+        for message in messages:
+            send_message(sender, message)
+        mark_as_precio_sent(sender)
+    finally:
+        # Remover 'precio' de active_sessions[sender]
+        if 'precio' in active_sessions.get(sender, {}):
+            active_sessions[sender].pop('precio', None)
+            if not active_sessions[sender]:
+                active_sessions.pop(sender, None)
+        # Limpiar la sesión y el bloqueo
+        session_locks.pop(sender, None)
 
 def send_tienda_messages(sender):
     """Envía las imágenes y video de la tienda al cliente."""
@@ -569,6 +590,11 @@ Entregamos *personalmente a domicilio*"""
         
         mark_as_tienda_sent(sender)
     finally:
+        # Remover 'tienda' de active_sessions[sender]
+        if 'tienda' in active_sessions.get(sender, {}):
+            active_sessions[sender].pop('tienda', None)
+            if not active_sessions[sender]:
+                active_sessions.pop(sender, None)
         # Limpiar la sesión y el bloqueo
         session_locks.pop(sender, None)
 
@@ -590,7 +616,11 @@ def send_welcome_pdfs_videos_to_client(sender):
 
         mark_as_sent(sender)
     finally:
-        active_sessions.pop(sender, None)
+        # Remover 'welcome' de active_sessions[sender]
+        if 'welcome' in active_sessions.get(sender, {}):
+            active_sessions[sender].pop('welcome', None)
+            if not active_sessions[sender]:
+                active_sessions.pop(sender, None)
         session_locks.pop(sender, None)
 
 if __name__ == '__main__':
